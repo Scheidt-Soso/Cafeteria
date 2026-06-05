@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import model.Pedido;
+import model.StatusEnum;
 
 public class PedidoDAO {
 
@@ -48,6 +49,14 @@ public class PedidoDAO {
 
                 pedido.setId(rs.getInt("id"));
                 pedido.setClienteId(rs.getInt("cliente_id"));
+                pedido.setStatus(
+                    StatusEnum.valueOf(rs.getString("status"))
+                );
+
+                Timestamp dataCriacao = rs.getTimestamp("data_criacao");
+                if (dataCriacao != null) {
+                    pedido.setDataCriacao(dataCriacao);
+                }
 
                 pedidos.add(pedido);
             }
