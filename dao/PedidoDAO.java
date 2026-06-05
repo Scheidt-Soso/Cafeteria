@@ -67,4 +67,25 @@ public class PedidoDAO {
 
         return pedidos;
     }
+
+    public void atualizarStatus(int pedidoId, StatusEnum status) {
+
+        String sql = "UPDATE pedidos SET status = ? WHERE id = ?";
+
+        try (
+            Connection conn = ConexaoFactory.getConexao();
+            PreparedStatement stmt = conn.prepareStatement(sql)
+        ) {
+
+            stmt.setString(1, status.name());
+            stmt.setInt(2, pedidoId);
+
+            stmt.executeUpdate();
+
+            System.out.println("Status atualizado!");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 }
