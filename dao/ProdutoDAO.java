@@ -1,5 +1,6 @@
 package dao;
 
+import model.CategoriaEnum;
 import model.Produto;
 import java.sql.*;
 import java.util.ArrayList;
@@ -52,6 +53,9 @@ public class ProdutoDAO {
                 produto.setPreco(rs.getDouble("preco"));
                 produto.setQuantidadeEstoque(
                     rs.getInt("quantidade_estoque")
+                );
+                produto.setCategoria(
+                    CategoriaEnum.valueOf(rs.getString("categoria"))
                 );
 
                 produtos.add(produto);
