@@ -201,8 +201,28 @@ public class Main {
 
         while (true) {
             listarProdutos();
+            System.out.println("0 - Voltar");
             System.out.print("ID do produto: ");
             int produtoId = lerInteiro();
+
+            if (produtoId == 0) {
+                if (carrinho.isEmpty()) {
+                    System.out.println("Pedido cancelado.");
+                    return;
+                }
+                System.out.println("\n1. Adicionar mais produtos");
+                System.out.println("2. Finalizar compra");
+                System.out.println("3. Cancelar pedido");
+                System.out.print("Escolha: ");
+                int opcao = lerInteiro();
+                if (opcao == 2) {
+                    break;
+                } else if (opcao == 3) {
+                    System.out.println("Pedido cancelado.");
+                    return;
+                }
+                continue;
+            }
 
             Produto produto = produtoDAO.buscarPorId(produtoId);
             if (produto == null) {
@@ -246,29 +266,6 @@ public class Main {
             return;
         }
 
-        boolean estoqueOk = true;
-        for (ItemPedido item : carrinho) {
-            Produto p = produtoDAO.buscarPorId(item.getProdutoId());
-            if (p == null || item.getQuantidade() > p.getQuantidadeEstoque()) {
-                System.out.println("Estoque insuficiente para " + (p != null ? p.getNome() : "produto " + item.getProdutoId())
-                    + ". Disponível: " + (p != null ? p.getQuantidadeEstoque() : 0));
-                estoqueOk = false;
-            }
-        }
-
-        if (!estoqueOk) {
-            Pedido pedido = new Pedido(clienteId, StatusEnum.CANCELADO);
-            int pedidoId = pedidoDAO.inserir(pedido);
-            if (pedidoId != -1) {
-                for (ItemPedido item : carrinho) {
-                    item.setPedidoId(pedidoId);
-                    itemPedidoDAO.inserir(item);
-                }
-                System.out.println("Pedido #" + pedidoId + " cancelado por falta de estoque.");
-            }
-            return;
-        }
-
         Pedido pedido = new Pedido(clienteId, StatusEnum.FILA);
         int pedidoId = pedidoDAO.inserir(pedido);
 
@@ -280,10 +277,6 @@ public class Main {
         for (ItemPedido item : carrinho) {
             item.setPedidoId(pedidoId);
             itemPedidoDAO.inserir(item);
-
-            Produto p = produtoDAO.buscarPorId(item.getProdutoId());
-            int novoEstoque = p.getQuantidadeEstoque() - item.getQuantidade();
-            produtoDAO.atualizarEstoque(item.getProdutoId(), novoEstoque);
         }
 
         System.out.println("Pedido #" + pedidoId + " enviado para a fila de processamento!");
@@ -337,23 +330,28 @@ public class Main {
             return;
         }
 
-        if (pedido.getStatus() == StatusEnum.CANCELADO || pedido.getStatus() == StatusEnum.FINALIZADO) {
-            System.out.println("Este pedido já foi " + pedido.getStatus().name().toLowerCase() + ".");
+        if (pedido.getStatus() == StatusEnum.CANCELADO) {
+            System.out.println("Este pedido já foi cancelado.");
             return;
         }
 
+        boolean foiFinalizado = pedido.getStatus() == StatusEnum.FINALIZADO;
+
         pedidoDAO.atualizarStatus(pedidoId, StatusEnum.CANCELADO);
 
-        List<ItemPedido> itens = itemPedidoDAO.listarPorPedido(pedidoId);
-        for (ItemPedido item : itens) {
-            Produto p = produtoDAO.buscarPorId(item.getProdutoId());
-            if (p != null) {
-                int novoEstoque = p.getQuantidadeEstoque() + item.getQuantidade();
-                produtoDAO.atualizarEstoque(item.getProdutoId(), novoEstoque);
+        if (foiFinalizado) {
+            List<ItemPedido> itens = itemPedidoDAO.listarPorPedido(pedidoId);
+            for (ItemPedido item : itens) {
+                Produto p = produtoDAO.buscarPorId(item.getProdutoId());
+                if (p != null) {
+                    int novoEstoque = p.getQuantidadeEstoque() + item.getQuantidade();
+                    produtoDAO.atualizarEstoque(item.getProdutoId(), novoEstoque);
+                }
             }
+            System.out.println("Pedido #" + pedidoId + " cancelado! Itens devolvidos ao estoque.");
+        } else {
+            System.out.println("Pedido #" + pedidoId + " cancelado!");
         }
-
-        System.out.println("Pedido #" + pedidoId + " cancelado! Itens devolvidos ao estoque.");
     }
 
     private static void editarProduto() {

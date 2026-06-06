@@ -72,6 +72,8 @@ public class ProcessadorPedidosThread extends Thread {
                     continue;
                 }
 
+                debitarEstoque(conn, pedidoId);
+
                 try (PreparedStatement stmt = conn.prepareStatement(
                         "UPDATE pedidos SET status = ? WHERE id = ?")) {
                     stmt.setString(1, StatusEnum.FINALIZADO.name());
@@ -92,19 +94,42 @@ public class ProcessadorPedidosThread extends Thread {
             + "FROM itens_pedido ip "
             + "JOIN produtos p ON p.id = ip.produto_id "
             + "WHERE ip.pedido_id = ?";
-
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, pedidoId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    int quantidadePedido = rs.getInt("quantidade");
-                    int quantidadeEstoque = rs.getInt("quantidade_estoque");
-                    if (quantidadePedido > quantidadeEstoque) {
+                    int qtdPedido = rs.getInt("quantidade");
+                    int qtdEstoque = rs.getInt("quantidade_estoque");
+                    if (qtdPedido > qtdEstoque) {
                         return false;
                     }
                 }
             }
         }
         return true;
+    }
+
+    private void debitarEstoque(Connection conn, int pedidoId) throws SQLException {
+        String sql = "SELECT ip.produto_id, ip.quantidade, p.quantidade_estoque "
+            + "FROM itens_pedido ip "
+            + "JOIN produtos p ON p.id = ip.produto_id "
+            + "WHERE ip.pedido_id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, pedidoId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int produtoId = rs.getInt("produto_id");
+                    int qtdPedido = rs.getInt("quantidade");
+                    int qtdEstoque = rs.getInt("quantidade_estoque");
+                    int novoEstoque = qtdEstoque - qtdPedido;
+                    try (PreparedStatement update = conn.prepareStatement(
+                            "UPDATE produtos SET quantidade_estoque = ? WHERE id = ?")) {
+                        update.setInt(1, novoEstoque);
+                        update.setInt(2, produtoId);
+                        update.executeUpdate();
+                    }
+                }
+            }
+        }
     }
 }
