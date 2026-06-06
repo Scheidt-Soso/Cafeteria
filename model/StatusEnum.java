@@ -4,5 +4,6 @@ public enum StatusEnum {
     ABERTO,
     FILA,
     PROCESSANDO,
-    FINALIZADO
+    FINALIZADO,
+    CANCELADO
 }

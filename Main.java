@@ -111,6 +111,8 @@ public class Main {
             System.out.println("\n--- PRODUTOS ---");
             System.out.println("1. Cadastrar produto");
             System.out.println("2. Listar produtos");
+            System.out.println("3. Editar produto");
+            System.out.println("4. Deletar produto");
             System.out.println("0. Voltar");
             System.out.print("Escolha: ");
 
@@ -119,6 +121,8 @@ public class Main {
             switch (opcao) {
                 case 1 -> cadastrarProduto();
                 case 2 -> listarProdutos();
+                case 3 -> editarProduto();
+                case 4 -> deletarProduto();
                 case 0 -> { return; }
                 default -> System.out.println("Opção inválida!");
             }
@@ -172,7 +176,7 @@ public class Main {
             System.out.println("\n--- PEDIDOS ---");
             System.out.println("1. Criar pedido");
             System.out.println("2. Listar pedidos");
-            System.out.println("3. Listar itens de um pedido");
+            System.out.println("3. Cancelar pedido");
             System.out.println("0. Voltar");
             System.out.print("Escolha: ");
 
@@ -181,7 +185,7 @@ public class Main {
             switch (opcao) {
                 case 1 -> criarPedido();
                 case 2 -> listarPedidos();
-                case 3 -> listarItens();
+                case 3 -> cancelarPedido();
                 case 0 -> { return; }
                 default -> System.out.println("Opção inválida!");
             }
@@ -242,6 +246,29 @@ public class Main {
             return;
         }
 
+        boolean estoqueOk = true;
+        for (ItemPedido item : carrinho) {
+            Produto p = produtoDAO.buscarPorId(item.getProdutoId());
+            if (p == null || item.getQuantidade() > p.getQuantidadeEstoque()) {
+                System.out.println("Estoque insuficiente para " + (p != null ? p.getNome() : "produto " + item.getProdutoId())
+                    + ". Disponível: " + (p != null ? p.getQuantidadeEstoque() : 0));
+                estoqueOk = false;
+            }
+        }
+
+        if (!estoqueOk) {
+            Pedido pedido = new Pedido(clienteId, StatusEnum.CANCELADO);
+            int pedidoId = pedidoDAO.inserir(pedido);
+            if (pedidoId != -1) {
+                for (ItemPedido item : carrinho) {
+                    item.setPedidoId(pedidoId);
+                    itemPedidoDAO.inserir(item);
+                }
+                System.out.println("Pedido #" + pedidoId + " cancelado por falta de estoque.");
+            }
+            return;
+        }
+
         Pedido pedido = new Pedido(clienteId, StatusEnum.FILA);
         int pedidoId = pedidoDAO.inserir(pedido);
 
@@ -268,35 +295,142 @@ public class Main {
             System.out.println("Nenhum pedido cadastrado.");
             return;
         }
-        System.out.println("\nID | Cliente ID | Status | Data de Criação");
-        System.out.println("-".repeat(60));
         for (Pedido p : pedidos) {
-            System.out.printf("%d | %d | %s | %s%n",
-                p.getId(), p.getClienteId(), p.getStatus().name(),
-                p.getDataCriacao() != null ? p.getDataCriacao().toString() : "-");
+            System.out.println("Pedido #" + p.getId() + " | Cliente: " + p.getClienteId()
+                + " | Status: " + p.getStatus().name()
+                + " | Data: " + (p.getDataCriacao() != null ? p.getDataCriacao().toString() : "-"));
+
+            List<ItemPedido> itens = itemPedidoDAO.listarPorPedido(p.getId());
+            if (itens.isEmpty()) {
+                System.out.println("  (nenhum item)");
+            } else {
+                double total = 0;
+                for (ItemPedido item : itens) {
+                    Produto prod = produtoDAO.buscarPorId(item.getProdutoId());
+                    String nome = prod != null ? prod.getNome() : "Produto #" + item.getProdutoId();
+                    double subtotal = item.getQuantidade() * item.getPreco();
+                    System.out.printf("  %s | Qtd: %d | Preço: %.2f | Subtotal: %.2f%n",
+                        nome, item.getQuantidade(), item.getPreco(), subtotal);
+                    total += subtotal;
+                }
+                System.out.printf("  TOTAL: %.2f%n", total);
+            }
+            System.out.println("-".repeat(70));
         }
     }
 
-    private static void listarItens() {
-        System.out.print("ID do pedido: ");
+    private static void cancelarPedido() {
+        listarPedidos();
+        System.out.print("ID do pedido a cancelar: ");
         int pedidoId = lerInteiro();
 
-        List<ItemPedido> itens = itemPedidoDAO.listarPorPedido(pedidoId);
-        if (itens.isEmpty()) {
-            System.out.println("Nenhum item encontrado para este pedido.");
+        Pedido pedido = null;
+        for (Pedido p : pedidoDAO.listar()) {
+            if (p.getId() == pedidoId) {
+                pedido = p;
+                break;
+            }
+        }
+
+        if (pedido == null) {
+            System.out.println("Pedido não encontrado.");
             return;
         }
-        System.out.println("\nProduto ID | Quantidade | Preço Unitário | Subtotal");
-        System.out.println("-".repeat(60));
-        double total = 0;
-        for (ItemPedido item : itens) {
-            double subtotal = item.getQuantidade() * item.getPreco();
-            System.out.printf("%d | %d | %.2f | %.2f%n",
-                item.getProdutoId(), item.getQuantidade(), item.getPreco(), subtotal);
-            total += subtotal;
+
+        if (pedido.getStatus() == StatusEnum.CANCELADO || pedido.getStatus() == StatusEnum.FINALIZADO) {
+            System.out.println("Este pedido já foi " + pedido.getStatus().name().toLowerCase() + ".");
+            return;
         }
-        System.out.println("-".repeat(60));
-        System.out.printf("TOTAL: %.2f%n", total);
+
+        pedidoDAO.atualizarStatus(pedidoId, StatusEnum.CANCELADO);
+
+        List<ItemPedido> itens = itemPedidoDAO.listarPorPedido(pedidoId);
+        for (ItemPedido item : itens) {
+            Produto p = produtoDAO.buscarPorId(item.getProdutoId());
+            if (p != null) {
+                int novoEstoque = p.getQuantidadeEstoque() + item.getQuantidade();
+                produtoDAO.atualizarEstoque(item.getProdutoId(), novoEstoque);
+            }
+        }
+
+        System.out.println("Pedido #" + pedidoId + " cancelado! Itens devolvidos ao estoque.");
     }
 
+    private static void editarProduto() {
+        listarProdutos();
+        System.out.print("ID do produto para editar: ");
+        int id = lerInteiro();
+
+        Produto produto = produtoDAO.buscarPorId(id);
+        if (produto == null) {
+            System.out.println("Produto não encontrado.");
+            return;
+        }
+
+        System.out.println("Deixe em branco para manter o valor atual.");
+        System.out.print("Nome (" + produto.getNome() + "): ");
+        String nome = scanner.nextLine().trim();
+        if (!nome.isEmpty()) produto.setNome(nome);
+
+        System.out.print("Preço (" + produto.getPreco() + "): ");
+        String precoStr = scanner.nextLine().trim();
+        if (!precoStr.isEmpty()) {
+            try {
+                double preco = Double.parseDouble(precoStr);
+                if (preco > 0) produto.setPreco(preco);
+            } catch (NumberFormatException e) {
+                System.out.println("Preço inválido, mantendo valor atual.");
+            }
+        }
+
+        System.out.print("Quantidade em estoque (" + produto.getQuantidadeEstoque() + "): ");
+        String estoqueStr = scanner.nextLine().trim();
+        if (!estoqueStr.isEmpty()) {
+            try {
+                int estoque = Integer.parseInt(estoqueStr);
+                if (estoque >= 0) produto.setQuantidadeEstoque(estoque);
+            } catch (NumberFormatException e) {
+                System.out.println("Estoque inválido, mantendo valor atual.");
+            }
+        }
+
+        System.out.println("Categoria atual: " + produto.getCategoria().name());
+        for (CategoriaEnum cat : CategoriaEnum.values()) {
+            System.out.println("  " + cat.ordinal() + ". " + cat.name());
+        }
+        System.out.print("Nova categoria (ou vazio para manter): ");
+        String catStr = scanner.nextLine().trim();
+        if (!catStr.isEmpty()) {
+            try {
+                int catIdx = Integer.parseInt(catStr);
+                if (catIdx >= 0 && catIdx < CategoriaEnum.values().length) {
+                    produto.setCategoria(CategoriaEnum.values()[catIdx]);
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Categoria inválida, mantendo atual.");
+            }
+        }
+
+        produtoDAO.atualizar(produto);
+    }
+
+    private static void deletarProduto() {
+        listarProdutos();
+        System.out.print("ID do produto para deletar: ");
+        int id = lerInteiro();
+
+        Produto produto = produtoDAO.buscarPorId(id);
+        if (produto == null) {
+            System.out.println("Produto não encontrado.");
+            return;
+        }
+
+        System.out.print("Tem certeza que deseja deletar \"" + produto.getNome() + "\"? (s/N): ");
+        String confirmacao = scanner.nextLine().trim();
+        if (confirmacao.equalsIgnoreCase("s")) {
+            produtoDAO.deletar(id);
+        } else {
+            System.out.println("Operação cancelada.");
+        }
+    }
 }
