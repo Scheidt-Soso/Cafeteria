@@ -64,6 +64,7 @@ public class Main {
             System.out.println("\n--- CLIENTES ---");
             System.out.println("1. Cadastrar cliente");
             System.out.println("2. Listar clientes");
+            System.out.println("3. Editar cliente");
             System.out.println("0. Voltar");
             System.out.print("Escolha: ");
 
@@ -72,6 +73,7 @@ public class Main {
             switch (opcao) {
                 case 1 -> cadastrarCliente();
                 case 2 -> listarClientes();
+                case 3 -> editarCliente();
                 case 0 -> { return; }
                 default -> System.out.println("Opção inválida!");
             }
@@ -102,6 +104,33 @@ public class Main {
             System.out.printf("%d | %s | %s | %s%n",
                 c.getId(), c.getNome(), c.getEmail(), c.getTelefone());
         }
+    }
+
+    private static void editarCliente() {
+        listarClientes();
+        System.out.print("ID do cliente para editar: ");
+        int id = lerInteiro();
+
+        Cliente cliente = clienteDAO.buscarPorId(id);
+        if (cliente == null) {
+            System.out.println("Cliente não encontrado.");
+            return;
+        }
+
+        System.out.println("Deixe em branco para manter o valor atual.");
+        System.out.print("Nome (" + cliente.getNome() + "): ");
+        String nome = scanner.nextLine().trim();
+        if (!nome.isEmpty()) cliente.setNome(nome);
+
+        System.out.print("Email (" + cliente.getEmail() + "): ");
+        String email = scanner.nextLine().trim();
+        if (!email.isEmpty()) cliente.setEmail(email);
+
+        System.out.print("Telefone (" + cliente.getTelefone() + "): ");
+        String telefone = scanner.nextLine().trim();
+        if (!telefone.isEmpty()) cliente.setTelefone(telefone);
+
+        clienteDAO.atualizar(cliente);
     }
 
     // =========================== PRODUTOS ===========================
