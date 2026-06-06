@@ -197,8 +197,6 @@ java -cp ".;mysql-connector-j-9.7.0.jar" Main
 ## 👥 Integrantes
 
 - **Sofia Scheidt Alves**
-- **Yasminn da Silva Carvalho**
-- **Gabryele Camargo Oliveira**
 
 ---
 
