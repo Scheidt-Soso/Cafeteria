@@ -67,4 +67,42 @@ public class ProdutoDAO {
 
         return produtos;
     }
+
+    public Produto buscarPorId(int id) {
+        String sql = "SELECT * FROM produtos WHERE id = ?";
+        try (
+            Connection conn = ConexaoFactory.getConexao();
+            PreparedStatement stmt = conn.prepareStatement(sql)
+        ) {
+            stmt.setInt(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    Produto p = new Produto();
+                    p.setId(rs.getInt("id"));
+                    p.setNome(rs.getString("nome"));
+                    p.setPreco(rs.getDouble("preco"));
+                    p.setQuantidadeEstoque(rs.getInt("quantidade_estoque"));
+                    p.setCategoria(CategoriaEnum.valueOf(rs.getString("categoria")));
+                    return p;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public void atualizarEstoque(int produtoId, int novaQuantidade) {
+        String sql = "UPDATE produtos SET quantidade_estoque = ? WHERE id = ?";
+        try (
+            Connection conn = ConexaoFactory.getConexao();
+            PreparedStatement stmt = conn.prepareStatement(sql)
+        ) {
+            stmt.setInt(1, novaQuantidade);
+            stmt.setInt(2, produtoId);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 }

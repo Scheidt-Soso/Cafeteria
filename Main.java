@@ -1,6 +1,8 @@
 import dao.*;
 import model.*;
+import thread.ProcessadorPedidosThread;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -13,6 +15,9 @@ public class Main {
     private static final ItemPedidoDAO itemPedidoDAO = new ItemPedidoDAO();
 
     public static void main(String[] args) {
+        ProcessadorPedidosThread processador = new ProcessadorPedidosThread();
+        processador.start();
+
         while (true) {
             System.out.println("\n===== CAFETERIA - SISTEMA DE GESTÃO =====");
             System.out.println("1. Gerenciar Clientes");
@@ -167,9 +172,7 @@ public class Main {
             System.out.println("\n--- PEDIDOS ---");
             System.out.println("1. Criar pedido");
             System.out.println("2. Listar pedidos");
-            System.out.println("3. Adicionar item ao pedido");
-            System.out.println("4. Listar itens de um pedido");
-            System.out.println("5. Atualizar status do pedido");
+            System.out.println("3. Listar itens de um pedido");
             System.out.println("0. Voltar");
             System.out.print("Escolha: ");
 
@@ -178,9 +181,7 @@ public class Main {
             switch (opcao) {
                 case 1 -> criarPedido();
                 case 2 -> listarPedidos();
-                case 3 -> adicionarItem();
-                case 4 -> listarItens();
-                case 5 -> atualizarStatus();
+                case 3 -> listarItens();
                 case 0 -> { return; }
                 default -> System.out.println("Opção inválida!");
             }
@@ -192,8 +193,73 @@ public class Main {
         System.out.print("ID do cliente: ");
         int clienteId = lerInteiro();
 
-        Pedido pedido = new Pedido(clienteId, StatusEnum.ABERTO);
-        pedidoDAO.inserir(pedido);
+        List<ItemPedido> carrinho = new ArrayList<>();
+
+        while (true) {
+            listarProdutos();
+            System.out.print("ID do produto: ");
+            int produtoId = lerInteiro();
+
+            Produto produto = produtoDAO.buscarPorId(produtoId);
+            if (produto == null) {
+                System.out.println("Produto não encontrado!");
+                continue;
+            }
+
+            System.out.print("Quantidade: ");
+            int quantidade = lerInteiro();
+
+            if (quantidade <= 0) {
+                System.out.println("Quantidade inválida!");
+                continue;
+            }
+
+            if (quantidade > produto.getQuantidadeEstoque()) {
+                System.out.println("Estoque insuficiente! Disponível apenas "
+                    + produto.getQuantidadeEstoque() + " unidades de " + produto.getNome() + ".");
+                continue;
+            }
+
+            carrinho.add(new ItemPedido(0, produtoId, quantidade, produto.getPreco()));
+            System.out.println(produto.getNome() + " adicionado ao carrinho!");
+
+            System.out.println("\n1. Adicionar mais produtos");
+            System.out.println("2. Finalizar compra");
+            System.out.println("3. Cancelar pedido");
+            System.out.print("Escolha: ");
+
+            int opcao = lerInteiro();
+
+            if (opcao == 2) {
+                break;
+            } else if (opcao == 3) {
+                System.out.println("Pedido cancelado.");
+                return;
+            }
+        }
+
+        if (carrinho.isEmpty()) {
+            return;
+        }
+
+        Pedido pedido = new Pedido(clienteId, StatusEnum.FILA);
+        int pedidoId = pedidoDAO.inserir(pedido);
+
+        if (pedidoId == -1) {
+            System.out.println("Erro ao criar pedido!");
+            return;
+        }
+
+        for (ItemPedido item : carrinho) {
+            item.setPedidoId(pedidoId);
+            itemPedidoDAO.inserir(item);
+
+            Produto p = produtoDAO.buscarPorId(item.getProdutoId());
+            int novoEstoque = p.getQuantidadeEstoque() - item.getQuantidade();
+            produtoDAO.atualizarEstoque(item.getProdutoId(), novoEstoque);
+        }
+
+        System.out.println("Pedido #" + pedidoId + " enviado para a fila de processamento!");
     }
 
     private static void listarPedidos() {
@@ -209,30 +275,6 @@ public class Main {
                 p.getId(), p.getClienteId(), p.getStatus().name(),
                 p.getDataCriacao() != null ? p.getDataCriacao().toString() : "-");
         }
-    }
-
-    private static void adicionarItem() {
-        listarPedidos();
-        System.out.print("ID do pedido: ");
-        int pedidoId = lerInteiro();
-
-        listarProdutos();
-        System.out.print("ID do produto: ");
-        int produtoId = lerInteiro();
-
-        System.out.print("Quantidade: ");
-        int quantidade = lerInteiro();
-
-        System.out.print("Preço unitário: ");
-        double preco = lerDouble();
-
-        if (quantidade <= 0 || preco <= 0) {
-            System.out.println("Quantidade e preço devem ser positivos!");
-            return;
-        }
-
-        ItemPedido item = new ItemPedido(pedidoId, produtoId, quantidade, preco);
-        itemPedidoDAO.inserir(item);
     }
 
     private static void listarItens() {
@@ -257,24 +299,4 @@ public class Main {
         System.out.printf("TOTAL: %.2f%n", total);
     }
 
-    private static void atualizarStatus() {
-        listarPedidos();
-        System.out.print("ID do pedido: ");
-        int pedidoId = lerInteiro();
-
-        System.out.println("Status disponíveis:");
-        for (StatusEnum s : StatusEnum.values()) {
-            System.out.println("  " + s.ordinal() + ". " + s.name());
-        }
-        System.out.print("Escolha o número do status: ");
-        int statusIdx = lerInteiro();
-
-        if (statusIdx < 0 || statusIdx >= StatusEnum.values().length) {
-            System.out.println("Status inválido!");
-            return;
-        }
-
-        StatusEnum novoStatus = StatusEnum.values()[statusIdx];
-        pedidoDAO.atualizarStatus(pedidoId, novoStatus);
-    }
 }
